@@ -63,8 +63,9 @@ public:
         // move assignment
         _M_connected_promise = std::promise<bool>();
         // wait for connected or connect failed
-        if (_M_connected_promise.get_future().get())
-            _M_conn = conn;
+        if (!_M_connected_promise.get_future().get())
+            throw std::runtime_error("connect failed!");
+        _M_conn = conn;
     }
 
     void send(std::string const &text) {
@@ -89,6 +90,12 @@ public:
     virtual
     void on_failed(websocketpp::connection_hdl hdl) {
         std::cout << "on_failed" << std::endl;
+        try {
+            throw std::system_error(
+                    _M_endpoint.get_con_from_hdl(hdl)->get_ec());
+        } catch (...) {
+            _M_connected_promise.set_exception(std::current_exception());
+        }
     }
 
     virtual
@@ -124,6 +131,7 @@ public:
     // provide event loop for asio
     virtual
     void blocking_running() {
+        _M_received_stop_signal = false;
         try {
             this->_M_endpoint.run();
         } catch (...) {
