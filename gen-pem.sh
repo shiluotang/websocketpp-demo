@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-declare readonly COMMON_NAME="PowerGlobe"
-declare readonly ORGNIZATION_UNIT="Technology Department"
-declare readonly ORGNIZATION="Tuben Info Tech LTD."
-declare readonly PROVINCE="Jin'an"
-declare readonly STATE="Shanghai"
-declare readonly COUNTRY="CN"
+declare readonly COMMON_NAME="some task"
+declare readonly ORGNIZATION_UNIT="some department"
+declare readonly ORGNIZATION="some company"
+declare readonly PROVINCE="some provide"
+declare readonly STATE="some state"
+declare readonly COUNTRY="AB"
 declare readonly KEYBITS=${KEYBITS:-2048}
 declare readonly KEYPAIR_FILENAME=keypair.pem
 declare readonly PRIKEY_FILENAME=prikey.pem
@@ -26,7 +26,7 @@ function key_pair_extract_prikey() {
 
 function print_key_only() {
     openssl rsa -in ${PRIKEY_FILENAME} -text -noout
-} 
+}
 
 function print_crt_only() {
     openssl x509 -in ${CERTIFICATE_FILENAME} -text -nocert
