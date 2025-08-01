@@ -40,7 +40,7 @@ private:
 };
 
 template <typename configuration>
-class ws_client_impl_base
+class ws_client_base
     : public ws_client {
 public:
     typedef configuration config_type;
@@ -50,11 +50,11 @@ public:
     typedef websocketpp::lib::error_code error_code;
     typedef websocketpp::connection_hdl connection_hdl;
 
-    ws_client_impl_base() {
+    ws_client_base() {
     }
 
     virtual
-    ~ws_client_impl_base() {
+    ~ws_client_base() {
         this->dispose();
     }
 
@@ -74,13 +74,13 @@ public:
 
         _M_endpoint.init_asio();
         _M_endpoint.set_open_handler(
-                bind(&ws_client_impl_base::on_opened, this, _1));
+                bind(&ws_client_base::on_opened, this, _1));
         _M_endpoint.set_close_handler(
-                bind(&ws_client_impl_base::on_closed, this, _1));
+                bind(&ws_client_base::on_closed, this, _1));
         _M_endpoint.set_fail_handler(
-                bind(&ws_client_impl_base::on_failed, this, _1));
+                bind(&ws_client_base::on_failed, this, _1));
         _M_endpoint.set_message_handler(
-                bind(&ws_client_impl_base::on_message, this, _1, _2));
+                bind(&ws_client_base::on_message, this, _1, _2));
     }
 
     virtual
@@ -94,7 +94,8 @@ public:
         // actual connecting
         _M_endpoint.connect(conn);
         // move assignment
-        _M_runner = std::thread(bind(&ws_client_impl_base::blocking_running, this));
+        _M_runner = std::thread(
+                bind(&ws_client_base::blocking_running, this));
         // move assignment
         _M_connected_promise = std::promise<bool>();
         // wait for connected or connect failed
@@ -105,9 +106,15 @@ public:
 
     virtual
     void disconnect() override {
+        namespace status = websocketpp::close::status;
         _M_received_stop_signal = true;
         if (_M_conn) {
-            _M_conn->close(websocketpp::close::status::normal, "OK");
+            // FIXME which one is better?
+            // _M_endpoint.close(
+            //         _M_conn,
+            //         status::normal,
+            //         "Normal Closure");
+            _M_conn->close(status::normal, "Normal Closure");
             _M_conn = nullptr;
         }
         if (_M_runner.joinable())
@@ -116,13 +123,11 @@ public:
 
     virtual
     void on_opened(websocketpp::connection_hdl hdl) {
-        std::cout << "on_opened" << std::endl;
         _M_connected_promise.set_value(true);
     }
 
     virtual
     void on_failed(websocketpp::connection_hdl hdl) {
-        std::cout << "on_failed" << std::endl;
         try {
             throw std::system_error(
                     _M_endpoint.get_con_from_hdl(hdl)->get_ec());
@@ -133,13 +138,11 @@ public:
 
     virtual
     void on_closed(websocketpp::connection_hdl hdl) {
-        std::cout << "on_closed" << std::endl;
     }
 
     virtual
     void on_message(websocketpp::connection_hdl hdl, message_ptr msg) {
         namespace opcode = websocketpp::frame::opcode;
-        std::cout << "on_message" << std::endl;
         switch (msg->get_opcode()) {
             case opcode::TEXT:
                 this->on_msg_recv(msg->get_payload(), false);
@@ -164,17 +167,11 @@ public:
         _M_endpoint.send(
                 _M_conn->get_handle(),
                 text,
-                binary ? opcode::text : opcode::binary);
+                binary ? opcode::binary : opcode::text);
     }
 
     virtual
     void on_msg_recv(std::string const &payload, bool binary) override {
-        std::ostringstream oss;
-        if (!binary)
-            oss << "[TEXT  ] " << payload << std::endl;
-        else
-            oss << "[BINARY] " << payload << std::endl;
-        std::cout << oss.str() << std::flush;
         if (!!_M_msg_handler)
             _M_msg_handler(payload, binary);
     }
@@ -189,7 +186,6 @@ public:
     void blocking_running() {
         _M_received_stop_signal = false;
         try {
-            std::cout << __PRETTY_FUNCTION__ << " endpoint.run()" << std::endl;
             this->_M_endpoint.run();
         } catch (...) {
             if (!_M_received_stop_signal)
@@ -214,20 +210,20 @@ protected:
     std::promise<bool> _M_connected_promise;
     msg_handler _M_msg_handler;
 private:
-    ws_client_impl_base(ws_client_impl_base const&);
-    ws_client_impl_base& operator=(ws_client_impl_base const&);
+    ws_client_base(ws_client_base const&);
+    ws_client_base& operator=(ws_client_base const&);
 };
 
 class ws_client_impl_raw
-    : public ws_client_impl_base<websocketpp::config::debug_asio> {
+    : public ws_client_base<websocketpp::config::debug_asio> {
 };
 
 class ws_client_impl_tls
-    : public ws_client_impl_base<websocketpp::config::debug_asio_tls> {
+    : public ws_client_base<websocketpp::config::debug_asio_tls> {
 public:
     typedef websocketpp::lib::asio::ssl::context context;
     typedef websocketpp::lib::shared_ptr<context> context_ptr;
-    typedef ws_client_impl_base<config_type> super;
+    typedef ws_client_base<config_type> super;
 
     virtual
     void init() override {
@@ -282,32 +278,34 @@ public:
 
     void connect(std::string const &uri_string) {
         websocketpp::uri uri(uri_string);
-        if (!_M_client || _M_client->is_secure() != uri.get_secure()) {
-            if (!uri.get_secure())
-                _M_client.reset(new ws_client_impl_raw());
-            else
-                _M_client.reset(new ws_client_impl_tls());
-            _M_client->init();
-            _M_client->set_msg_handler(
-                    std::bind(
-                        &websocket_client::on_msg_recv,
-                        this,
-                        std::placeholders::_1,
-                        std::placeholders::_2));
-        }
+        if (!uri.get_secure())
+            _M_client.reset(new ws_client_impl_raw());
+        else
+            _M_client.reset(new ws_client_impl_tls());
+        _M_client->init();
+        _M_client->set_msg_handler(
+                std::bind(
+                    &websocket_client::handle_message,
+                    this,
+                    std::placeholders::_1,
+                    std::placeholders::_2));
         _M_client->connect(uri_string);
     }
 
     void disconnect() {
-        if (!!_M_client)
+        if (!!_M_client) {
             _M_client->disconnect();
+            _M_client.reset();
+        }
     }
 
-    void on_msg_recv(std::string const &payload, bool binary = false) {
-        std::cout << __PRETTY_FUNCTION__ << " payload = " << payload << std::endl;
+    void handle_message(std::string const &payload, bool binary = false) {
+        std::cout << " payload = " << payload << std::endl;
     }
 
     void send_msg(std::string const &payload, bool binary = false) {
+        if (!_M_client)
+            return;
         _M_client->send_msg(payload, binary);
     }
 protected:
@@ -317,18 +315,14 @@ private:
 
 } // namespace anonymous
 
-TEST(gtest_hello, test1) {
+TEST(gtest_hello, test_websocket_client) {
     websocket_client client;
-    client.connect("wss://127.0.0.1:9000");
-    for (int i = 0, n = 1; i < n; ++i) {
-        client.send_msg("Mr. White", false);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    for (int k = 0, m = 3; k < m; ++k) {
+        client.connect("wss://127.0.0.1:9000");
+        for (int i = 0, n = 2; i < n; ++i) {
+            client.send_msg("Mr. White", false);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        client.disconnect();
     }
-    client.disconnect();
-    client.connect("wss://127.0.0.1:9000");
-    for (int i = 0, n = 1; i < n; ++i) {
-        client.send_msg("Mr. White", false);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
-    client.disconnect();
 }
