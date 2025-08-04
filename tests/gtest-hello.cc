@@ -318,7 +318,7 @@ private:
 TEST(gtest_hello, test_websocket_client) {
     websocket_client client;
     for (int k = 0, m = 3; k < m; ++k) {
-        client.connect("ws://127.0.0.1:9000");
+        client.connect("wss://127.0.0.1:9000");
         for (int i = 0, n = 2; i < n; ++i) {
             client.send_msg("Mr. White", false);
             std::this_thread::sleep_for(std::chrono::seconds(1));
