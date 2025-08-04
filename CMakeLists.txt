@@ -18,5 +18,7 @@ find_package(Boost CONFIG REQUIRED COMPONENTS system)
 endif()
 find_package(websocketpp CONFIG REQUIRED)
 
+add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+
 enable_testing()
 add_subdirectory(tests)
