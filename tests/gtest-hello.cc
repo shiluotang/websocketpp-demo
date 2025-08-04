@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include <websocketpp/config/debug_asio.hpp>
+#include <websocketpp/config/asio.hpp>
 #include <websocketpp/endpoint.hpp>
 #include <websocketpp/client.hpp>
 #include <websocketpp/message_buffer/message.hpp>
@@ -69,8 +69,8 @@ public:
         using websocketpp::lib::placeholders::_1;
         using websocketpp::lib::placeholders::_2;
 
-        _M_endpoint.set_access_channels(websocketpp::log::alevel::all);
-        _M_endpoint.set_error_channels(websocketpp::log::elevel::all);
+        _M_endpoint.set_access_channels(websocketpp::log::alevel::none);
+        _M_endpoint.set_error_channels(websocketpp::log::elevel::none);
 
         _M_endpoint.init_asio();
         _M_endpoint.set_open_handler(
@@ -215,11 +215,11 @@ private:
 };
 
 class ws_client_impl_raw
-    : public ws_client_base<websocketpp::config::debug_asio> {
+    : public ws_client_base<websocketpp::config::asio> {
 };
 
 class ws_client_impl_tls
-    : public ws_client_base<websocketpp::config::debug_asio_tls> {
+    : public ws_client_base<websocketpp::config::asio_tls> {
 public:
     typedef websocketpp::lib::asio::ssl::context context;
     typedef websocketpp::lib::shared_ptr<context> context_ptr;
@@ -300,7 +300,7 @@ public:
     }
 
     void handle_message(std::string const &payload, bool binary = false) {
-        std::cout << " payload = " << payload << std::endl;
+        std::cout << "payload = " << payload << std::endl;
     }
 
     void send_msg(std::string const &payload, bool binary = false) {
@@ -318,7 +318,7 @@ private:
 TEST(gtest_hello, test_websocket_client) {
     websocket_client client;
     for (int k = 0, m = 3; k < m; ++k) {
-        client.connect("wss://127.0.0.1:9000");
+        client.connect("ws://127.0.0.1:9000");
         for (int i = 0, n = 2; i < n; ++i) {
             client.send_msg("Mr. White", false);
             std::this_thread::sleep_for(std::chrono::seconds(1));
